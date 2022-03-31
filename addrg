@@ -1,0 +1,59 @@
+#!/bin/bash
+
+IFS=$'\n' 
+
+ReplayGain() {
+    #Return if not a directory
+    if [ ! -d "$1" ]
+    then
+        return
+    fi
+
+    flacnum=$(ls "$1" | grep -c \\.flac)
+    mp3num=$(ls "$1" | grep -c \\.mp3)
+
+    #Add ReplayGain tags to all fLAC files in directory
+    if [ $flacnum -gt 0 ]  
+    then
+	#Skip calculation if ReplayGain tags exist
+	if [ $(metaflac --show-tag=REPLAYGAIN_TRACK_GAIN "$1"/*.flac | grep -o "dB" | wc -l) -eq 0 ]
+	then
+		echo "Calculating ReplayGain for "$1""
+		metaflac --add-replay-gain "$1"/*.flac 1> /dev/null
+	        echo "Calculated ReplayGain for "$1""
+	else
+		echo ""$1" already had tags, skipping..."
+	fi
+    fi
+
+    #Add ReplayGain tags to all MP3 files in directory
+    if [ $mp3num -gt 0 ] 
+    then
+	echo "Calculating ReplayGain for "$1""
+        mp3gain -k -a -s i "$1"/*.mp3 1> /dev/null
+        echo "Calculated ReplayGain for "$1""
+    fi
+
+    #Recurse into subdirectories
+    for subdir in $(ls -Uad1 "$1"/*)
+    do
+        ReplayGain "$subdir" 
+    done
+}
+
+for i in "$@"
+do
+	#Strip trailing forward slashes from arguments, if they exist
+	if [ $(echo "$i" | grep -o ".$") == '/' ]
+	then
+		tocalc+=$(echo "$i" | sed 's/.$//')
+	else
+		tocalc+="$i"
+	fi
+done
+
+for directory in "${tocalc[@]}"
+do
+    ReplayGain $(find "$directory" -type d)
+done
+unset IFS
